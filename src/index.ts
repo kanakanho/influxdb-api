@@ -5,19 +5,33 @@ import CreateBucket from "./utils/CreateBucket.js";
 import WritePoint from "./utils/WritePoint.js";
 import { zWritePoint } from "./types/WritePoint.js";
 import { zHealth } from "./types/Health.js";
+import { basicAuth } from "hono/basic-auth";
 
 const app = new Hono();
+
+const HONO_USERNAME = process.env.HONO_USERNAME || "";
+const HONO_PASSWORD = process.env.HONO_PASSWORD || "";
 
 const INFLUX_URL = process.env.INFLUX_URL || "";
 const INFLUX_TOKEN = process.env.INFLUX_TOKEN || "";
 const INFLUX_ORG_ID = process.env.INFLUX_ORG_ID || "";
 const influxDB = new InfluxDB({ url: INFLUX_URL, token: INFLUX_TOKEN });
 
+// basic auth
+app.use(
+  "/api/v1/*",
+  basicAuth({
+    username: HONO_USERNAME,
+    password: HONO_PASSWORD,
+  })
+
+);
+
 app.get("/", (c) => {
   return c.text("Hello Inflexdb api!");
 });
 
-app.get("/health", async (c) => {
+app.get("/api/v1/health", async (c) => {
   const health = await fetch(`${INFLUX_URL}/health`, {
     method: "GET",
     headers: {
@@ -46,7 +60,7 @@ app.get("/health", async (c) => {
   return c.json(parsedHealth);
 });
 
-app.get("/api/v1/createBucket", (c) => {
+app.get("/api/v1/bucket/create", (c) => {
   const bucketName = c.req.query("bucketName");
   if (!bucketName) {
     console.error("bucketName is required");
@@ -64,8 +78,15 @@ app.get("/api/v1/createBucket", (c) => {
   return c.text("Bucket created successfully");
 });
 
-app.get("/api/v1/writePoint", (c) => {
-  const { measurement, tags, fields, bucketName, timestamp } = zWritePoint.parse(c.req.query());
+app.post("/api/v1/point/write", (c) => {
+  const writePoint = zWritePoint.safeParse(c.req.json());
+  if (!writePoint.success) {
+    console.error("Invalid write point", writePoint.error);
+    c.status(400);
+    return c.text("Invalid write point");
+  }
+
+  const { measurement, tags, fields, bucketName, timestamp } = writePoint.data;
   if (!measurement || !tags || !fields || !bucketName) {
     console.error("tags, fields and bucketName are required");
     c.status(400);
@@ -92,6 +113,10 @@ serve(
     port: 3004,
   },
   (info) => {
+    if (!HONO_PASSWORD || !HONO_USERNAME) {
+      console.error("Hono username and password are required");
+      process.exit(1);
+    }
     console.log(`INFLUX_URL: ${INFLUX_URL}`);
     console.log(`INFLUX_TOKEN: ${INFLUX_TOKEN}`);
     console.log(`INFLUX_ORG_ID: ${INFLUX_ORG_ID}`);
