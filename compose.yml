@@ -10,4 +10,4 @@ services:
     tty: true
     ports:
       - "3034:3004"
-    command: sh -c "yarn install && yarn run dev"
+    command: sh -c "yarn install && yarn build && yarn start"
