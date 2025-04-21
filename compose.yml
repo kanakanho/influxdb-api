@@ -1,0 +1,13 @@
+services:
+  api:
+    container_name: api
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+    tty: true
+    ports:
+      - "3034:3004"
+    command: sh -c "yarn install && yarn run dev"
